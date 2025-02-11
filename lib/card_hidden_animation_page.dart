@@ -52,6 +52,7 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
   void initState() {
     holeAnimationController.addListener(() => setState(() {}));
     cardOffsetAnimationController.addListener(() => setState(() {}));
+    cardOffsetAnimationController.value = 1.0;
     super.initState();
   }
 
@@ -79,8 +80,11 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
           ),
           const SizedBox(width: 20),
           FloatingActionButton(
-            onPressed: () {
+            onPressed: () async {
+              holeAnimationController.forward();
+              await Future.delayed(const Duration(milliseconds: 200));
               cardOffsetAnimationController.reverse();
+              await Future.delayed(const Duration(milliseconds: 800));
               holeAnimationController.reverse();
             },
             child: const Icon(Icons.add),
@@ -123,7 +127,7 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
                 ),
               ],
             ),
-          ),
+          ), 
         ),
       ),
     );
