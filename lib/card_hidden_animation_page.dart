@@ -48,10 +48,31 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
   double get cardElevation =>
       cardElevationTween.evaluate(cardOffsetAnimationController);
 
+  // Add new animation controller for sparkle effect
+  late final sparkleController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+
+  // Add background color animation
+  late final backgroundColorController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  );
+
+  late final backgroundColorAnimation = ColorTween(
+    begin: Colors.grey[100],
+    end: Colors.blue[50],
+  ).animate(CurvedAnimation(
+    parent: backgroundColorController,
+    curve: Curves.easeInOut,
+  ));
+
   @override
   void initState() {
     holeAnimationController.addListener(() => setState(() {}));
     cardOffsetAnimationController.addListener(() => setState(() {}));
+    backgroundColorController.addListener(() => setState(() {}));
     cardOffsetAnimationController.value = 1.0;
     super.initState();
   }
@@ -60,23 +81,28 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
   void dispose() {
     holeAnimationController.dispose();
     cardOffsetAnimationController.dispose();
+    backgroundColorController.dispose();
+    sparkleController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColorAnimation.value,
       floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton(
             onPressed: () async {
+              backgroundColorController.reverse();
               holeAnimationController.forward();
               await cardOffsetAnimationController.forward();
               Future.delayed(const Duration(milliseconds: 200),
                   () => holeAnimationController.reverse());
             },
             child: const Icon(Icons.remove),
+            backgroundColor: Colors.redAccent,
           ),
           const SizedBox(width: 20),
           FloatingActionButton(
@@ -84,51 +110,73 @@ class CardHiddenAnimationPageState extends State<CardHiddenAnimationPage>
               holeAnimationController.forward();
               await Future.delayed(const Duration(milliseconds: 200));
               cardOffsetAnimationController.reverse();
+              backgroundColorController.forward();
+              sparkleController.forward(from: 0);
               await Future.delayed(const Duration(milliseconds: 800));
               holeAnimationController.reverse();
             },
             child: const Icon(Icons.add),
+            backgroundColor: Colors.green,
           ),
         ],
       ),
-      body: Center(
-        child: SizedBox(
-          height: cardSize * 1.25,
-          width: double.infinity,
-          child: ClipPath(
-            clipper: BlackHoleClipper(),
-            child: Stack(
-              alignment: Alignment.bottomCenter,
-              clipBehavior: Clip.none,
-              children: [
-                SizedBox(
-                  width: holeSize,
-                  child: Image.asset(
-                    'images/hole.png',
-                    fit: BoxFit.fill,
-                  ),
-                ),
-                Positioned(
-                  child: Center(
-                    child: Transform.translate(
-                      offset: Offset(0, cardOffset),
-                      child: Transform.rotate(
-                        angle: cardRotation,
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: HelloWorldCard(
-                            size: cardSize,
-                            elevation: cardElevation,
+      body: Stack(
+        children: [
+          Center(
+            child: SizedBox(
+              height: cardSize * 1.25,
+              width: double.infinity,
+              child: ClipPath(
+                clipper: BlackHoleClipper(),
+                child: Stack(
+                  alignment: Alignment.bottomCenter,
+                  clipBehavior: Clip.none,
+                  children: [
+                    SizedBox(
+                      width: holeSize,
+                      child: Image.asset(
+                        'images/hole.png',
+                        fit: BoxFit.fill,
+                      ),
+                    ),
+                    Positioned(
+                      child: Center(
+                        child: Transform.translate(
+                          offset: Offset(0, cardOffset),
+                          child: Transform.rotate(
+                            angle: cardRotation,
+                            child: Stack(
+                              children: [
+                                // Add sparkle effect around the card
+                                SparkleEffect(
+                                  controller: sparkleController,
+                                  size: cardSize,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(20.0),
+                                  child: HelloWorldCard(
+                                    size: cardSize,
+                                    elevation: cardElevation,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ), 
-        ),
+          ),
+          // Add floating particles in the background
+          Positioned.fill(
+            child: CustomPaint(
+              painter: ParticlePainter(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -160,6 +208,71 @@ class BlackHoleClipper extends CustomClipper<Path> {
   bool shouldReclip(BlackHoleClipper oldClipper) => false;
 }
 
+// Add new SparkleEffect widget
+class SparkleEffect extends StatelessWidget {
+  final AnimationController controller;
+  final double size;
+
+  const SparkleEffect({
+    Key? key,
+    required this.controller,
+    required this.size,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: 1 + (0.2 * controller.value),
+          child: Opacity(
+            opacity: (1 - controller.value) * 0.5,
+            child: Container(
+              width: size + 40,
+              height: size + 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.blue.withOpacity(0.5),
+                    Colors.blue.withOpacity(0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Add ParticlePainter for background effect
+class ParticlePainter extends CustomPainter {
+  final List<Offset> particles = List.generate(
+    50,
+    (index) => Offset(
+      Random().nextDouble() * 400,
+      Random().nextDouble() * 800,
+    ),
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.blue.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
+    for (var particle in particles) {
+      canvas.drawCircle(particle, 2, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
 class HelloWorldCard extends StatelessWidget {
   const HelloWorldCard({
     Key? key,
@@ -174,20 +287,45 @@ class HelloWorldCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       elevation: elevation,
-      borderRadius: BorderRadius.circular(10),
-      child: SizedBox.square(
-        dimension: size,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: Colors.blue,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue, Colors.lightBlueAccent],
           ),
-          child: const Center(
-            child: Text(
-              'Hello\nWorld',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 18),
-            ),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.favorite,
+                color: Colors.white,
+                size: 40,
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Hello\nWorld',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      offset: Offset(2, 2),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
